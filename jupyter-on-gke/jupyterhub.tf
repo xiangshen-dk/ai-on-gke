@@ -28,7 +28,7 @@ provider "helm" {
 
 provider "google-beta" {
   project = var.project_id
-  region = var.location
+  region  = var.location
 }
 
 data "google_project" "project" {
@@ -37,8 +37,40 @@ data "google_project" "project" {
 
 # The data of the GCP backend service. IAP is enabled on this backend service
 data "google_compute_backend_service" "jupyter-ingress" {
-  name = var.service_name
+  name    = var.service_name
   project = var.project_id
+}
+
+resource "google_iap_web_backend_service_iam_binding" "binding" {
+  count               = var.add_auth && data.google_compute_backend_service.jupyter-ingress.generated_id != null ? 1 : 0
+  project             = var.project_id
+  web_backend_service = var.add_auth && data.google_compute_backend_service.jupyter-ingress.generated_id != null ? "${data.google_compute_backend_service.jupyter-ingress.name}" : "no-id-yet"
+  role                = "roles/iap.httpsResourceAccessor"
+  members             = split("\n", chomp(file("${path.module}/allowlist")))
+}
+
+# Enabled the IAP service 
+resource "google_project_service" "project_service" {
+  count   = var.enable_iap_service ? 1 : 0
+  project = var.project_id
+  service = "iap.googleapis.com"
+
+  disable_dependent_services = false
+  disable_on_destroy         = false
+}
+
+# Creates a "Brand", equivalent to the OAuth consent screen on GCP UI
+resource "google_iap_brand" "project_brand" {
+  count             = var.brand != "" ? 1 : 0
+  support_email     = var.support_email
+  application_title = "Cloud IAP protected Application"
+  project           = var.project_id
+}
+
+# Creates the OAuth client used in IAP
+resource "google_iap_client" "iap_oauth_client" {
+  display_name = "Jupyter-Client"
+  brand        = "projects/${data.google_project.project.number}/brands/${data.google_project.project.number}"
 }
 
 resource "kubernetes_namespace" "namespace" {
@@ -53,37 +85,39 @@ resource "kubernetes_namespace" "namespace" {
 }
 
 module "iap_auth" {
-  count = var.add_auth ? 1 : 0
+  count  = var.add_auth ? 1 : 0
   source = "./iap_module"
 
-  project_id = var.project_id
-  location = var.location
-  namespace  = var.namespace
-  client_id = var.client_id
-  client_secret = var.client_secret
-  service_name = var.service_name
+  project_id      = var.project_id
+  namespace       = var.namespace
+  service_name    = var.service_name
+  client          = google_iap_client.iap_oauth_client
+  url_domain_addr = var.url_domain_addr
+  url_domain_name = var.url_domain_name
 
   depends_on = [
     helm_release.jupyterhub,
-    kubernetes_namespace.namespace, 
+    kubernetes_namespace.namespace,
   ]
 }
 
 resource "helm_release" "jupyterhub" {
-  name       = "jupyterhub"
-  repository = "https://jupyterhub.github.io/helm-chart"
-  chart      = "jupyterhub"
-  namespace  = var.namespace
+  name            = "jupyterhub"
+  repository      = "https://jupyterhub.github.io/helm-chart"
+  chart           = "jupyterhub"
+  namespace       = var.namespace
   cleanup_on_fail = "true"
 
   values = [
-    templatefile(var.add_auth ? "${path.module}/jupyter_config/config-selfauth.yaml" : "${path.module}/jupyter_config/config-filestore.yaml", {
-      service_id = var.add_auth && data.google_compute_backend_service.jupyter-ingress.generated_id != null ? "${data.google_compute_backend_service.jupyter-ingress.generated_id}" : "no-id-yet"
+    templatefile("${path.module}/jupyter_config/config-selfauth.yaml", {
+      service_id     = var.add_auth && data.google_compute_backend_service.jupyter-ingress.generated_id != null ? "${data.google_compute_backend_service.jupyter-ingress.generated_id}" : "no-id-yet"
       project_number = data.google_project.project.number
+      authenticator_class = var.add_auth ? "'gcpiapjwtauthenticator.GCPIAPAuthenticator'" : "dummy"
+      service_type = var.add_auth ? "NodePort" : "LoadBalancer"
     })
   ]
 
-  depends_on = [  
+  depends_on = [
     kubernetes_namespace.namespace
   ]
 }

@@ -25,9 +25,9 @@ variable "create_namespace" {
 }
 
 variable "add_auth" {
-  type = bool
+  type        = bool
   description = "Enable iap authentication on jupyterhub"
-  default = true
+  default     = true
 }
 
 variable "project_id" {
@@ -42,22 +42,38 @@ variable "location" {
   default     = "us-central1"
 }
 
-variable "client_id" {
-  type = string
-  description = "Client ID of the OAuth Client"
-  default = "<ClientID Here>"
-  sensitive = true
-}
-
-variable "client_secret" {
-  type = string
-  description = "Client secret of the OAuth Client"
-  default = "<Client Secret Here>"
-  sensitive = true
-}
-
 variable "service_name" {
-  type =string
+  type        = string
   description = "Name of the Backend Service on GCP"
-  default = "no-id-yet"
+  default     = "no-id-yet"
+}
+
+variable "enable_iap_service" {
+  type        = bool
+  description = "Flag to enable iap service on this project. If it is already enabled, please set it to false."
+  default     = true
+}
+
+variable "brand" {
+  type        = string
+  description = "name of the brand if there isn't already on the project. If there is already a brand for your project, please leave it blank and empty"
+  default     = ""
+}
+
+variable "url_domain_addr" {
+  type        = string
+  description = "Domain provided by the user. If it's empty, we will create one for you."
+  default     = ""
+}
+
+variable "url_domain_name" {
+  type        = string
+  description = "Name of the domain provided by the user. This var will only be used if url_domain_addr is not empty"
+  default     = ""
+}
+
+variable "support_email" {
+  type        = string
+  description = "Email for users to contact with questions about their consent"
+  default     = "<Support email>"
 }
