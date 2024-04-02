@@ -32,7 +32,7 @@ spec:
     - |
       cd /tmp/
       git clone https://github.com/GoogleCloudPlatform/ai-on-gke.git
-      cp -r ai-on-gke/gke-tpu-examples/single-host-inference/jax .
+      cp -r ai-on-gke/tutorials-and-examples/tpu-examples/single-host-inference/jax .
       echo got jax stable-diffusion resources
   - name: export-stable-diffusion
     image: python:3.10
